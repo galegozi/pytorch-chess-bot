@@ -2,8 +2,10 @@
 Chess Transformer Model
 
 A resizable PyTorch transformer that encodes a chess position as a token
-sequence and predicts a probability distribution over all 64×64 from/to move
-pairs (promotions default to queen).
+sequence and predicts a probability distribution over all move indices.
+Moves are encoded across four 4096-entry planes (16 384 total): plane 0 for
+regular moves and queen promotions, planes 1–3 for knight, bishop, and rook
+underpromotions respectively.
 """
 
 import torch
@@ -19,7 +21,9 @@ class ChessTransformer(nn.Module):
     before feeding into the encoder stack.
 
     The policy head mean-pools the encoder output over the sequence dimension
-    and projects it to ``num_moves`` logits (default 4096 = 64×64 from/to pairs).
+    and projects it to ``num_moves`` logits.  The default of 16 384 covers four
+    4096-entry planes: plane 0 for regular moves and queen promotions, planes
+    1–3 for knight, bishop, and rook underpromotions respectively.
 
     Args:
         d_model:              Internal embedding dimension.
@@ -30,7 +34,7 @@ class ChessTransformer(nn.Module):
         num_piece_types:      Vocabulary size for piece tokens (13: empty + 6 white + 6 black).
         num_extra_token_vals: Vocabulary size for metadata tokens (128 is safe).
         num_extra_tokens:     Number of metadata tokens appended to the board sequence.
-        num_moves:            Output vocabulary size (64×64 = 4096 by default).
+        num_moves:            Output vocabulary size (16 384 = 4×64×64 by default).
     """
 
     # Canonical constructor kwargs used for checkpointing
@@ -56,7 +60,7 @@ class ChessTransformer(nn.Module):
         num_piece_types: int = 13,
         num_extra_token_vals: int = 128,
         num_extra_tokens: int = 6,
-        num_moves: int = 4096,
+        num_moves: int = 16384,
     ) -> None:
         super().__init__()
 

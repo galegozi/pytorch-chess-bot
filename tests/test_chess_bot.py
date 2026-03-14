@@ -68,7 +68,7 @@ class TestChessTransformer:
     def test_default_construction(self):
         model = ChessTransformer()
         assert model.d_model == 64
-        assert model.num_moves == 4096
+        assert model.num_moves == NUM_MOVE_INDICES
 
     def test_small_construction(self, small_model):
         assert small_model.d_model == 16
@@ -77,7 +77,7 @@ class TestChessTransformer:
         board_tokens = torch.zeros(2, 64, dtype=torch.long)
         extra_tokens = torch.zeros(2, 6, dtype=torch.long)
         logits = small_model(board_tokens, extra_tokens)
-        assert logits.shape == (2, 4096)
+        assert logits.shape == (2, NUM_MOVE_INDICES)
 
     def test_select_move_returns_legal(self, small_model, start_board):
         board_tokens, extra_tokens = encode_board(start_board)
@@ -147,15 +147,48 @@ class TestChessUtils:
             assert recovered.from_square == move.from_square
             assert recovered.to_square == move.to_square
 
-    def test_promotion_auto_queen(self):
+    def test_promotion_roundtrip(self):
         # Position where white pawn is about to promote
         board = chess.Board("8/P7/8/8/8/8/8/K6k w - - 0 1")
         for move in board.legal_moves:
             if move.promotion:
                 idx = move_to_index(move)
                 recovered = index_to_move(idx, board)
-                # auto-promote to queen
-                assert recovered.promotion == chess.QUEEN
+                # Full round-trip must preserve the promotion piece exactly
+                assert recovered == move, (
+                    f"Round-trip failed for {move.uci()}: got {recovered.uci()}"
+                )
+
+    def test_underpromotion_distinct_indices(self):
+        # Queen, knight, bishop, and rook promotions from the same square
+        # must each have a distinct move index.
+        board = chess.Board("8/P7/8/8/8/8/8/K6k w - - 0 1")
+        promo_moves = {
+            m.promotion: m for m in board.legal_moves
+            if m.promotion and m.from_square == chess.A7 and m.to_square == chess.A8
+        }
+        assert set(promo_moves.keys()) == {
+            chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT
+        }
+        indices = [move_to_index(m) for m in promo_moves.values()]
+        # All four indices must be distinct
+        assert len(set(indices)) == 4
+        # Queen lives in plane 0 (< 4096); underpromotions live in planes 1-3
+        assert move_to_index(promo_moves[chess.QUEEN])  <  4096
+        assert move_to_index(promo_moves[chess.KNIGHT]) in range( 4096,  8192)
+        assert move_to_index(promo_moves[chess.BISHOP]) in range( 8192, 12288)
+        assert move_to_index(promo_moves[chess.ROOK])   in range(12288, 16384)
+
+    def test_legal_moves_mask_promotions(self):
+        # All four promotion variants (Q, R, B, N) must be set in the mask.
+        board = chess.Board("8/P7/8/8/8/8/8/K6k w - - 0 1")
+        mask = legal_moves_mask(board)
+        assert mask.shape == (NUM_MOVE_INDICES,)
+        for move in board.legal_moves:
+            if move.promotion:
+                assert mask[move_to_index(move)].item(), (
+                    f"Legal promotion {move.uci()} not set in mask"
+                )
 
     def test_ep_square_encoding(self):
         # After 1. e4 e5 2. e5... actually after e4 d5 the ep square is set

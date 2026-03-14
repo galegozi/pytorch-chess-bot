@@ -45,8 +45,9 @@ python train.py --help
 square) plus **6 metadata tokens** (side to move, four castling-right flags,
 en-passant square).  A learned positional embedding is added, the sequence is
 fed through a standard PyTorch `TransformerEncoder`, and the encoder output is
-mean-pooled and projected to **4 096 move logits** (64 from-squares × 64
-to-squares; pawn promotions always use queen).
+mean-pooled and projected to **16 384 move logits** across four planes of
+4 096 entries each: plane 0 for regular moves and queen promotions, planes 1–3
+for knight, bishop, and rook underpromotions respectively.
 
 Default (smallest) hyperparameters:
 
