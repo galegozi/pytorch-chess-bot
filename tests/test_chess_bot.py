@@ -165,6 +165,37 @@ class TestChessUtils:
         # ep square should be encoded, not 10 (none)
         assert et[5].item() != 10
 
+    def test_multiple_en_passant_captures(self):
+        # Position: white pawns on c5 AND e5, black pawn just double-pushed
+        # d7→d5.  Both white pawns are adjacent to d5, so BOTH can capture
+        # en passant on d6.  Chess rules guarantee there is still only ONE
+        # ep_square (d6=43), but the legal-move mask must have BOTH capture
+        # moves set, and index_to_move must reconstruct both correctly.
+        board = chess.Board("8/8/8/2PpP3/8/8/8/K6k w - d6 0 1")
+
+        # Exactly one ep_square in the position
+        assert board.ep_square == chess.D6
+
+        # Extra token encodes the single ep target square
+        _, et = encode_board(board)
+        assert et[5].item() == 11 + chess.D6
+
+        # Both en passant captures must appear in the legal-move mask
+        mask = legal_moves_mask(board)
+        ep_move_c5 = chess.Move(chess.C5, chess.D6)  # c5xd6
+        ep_move_e5 = chess.Move(chess.E5, chess.D6)  # e5xd6
+        assert ep_move_c5 in board.legal_moves, "c5xd6 should be a legal en passant capture"
+        assert ep_move_e5 in board.legal_moves, "e5xd6 should be a legal en passant capture"
+        assert mask[move_to_index(ep_move_c5)].item(), "c5xd6 must be set in legal_moves_mask"
+        assert mask[move_to_index(ep_move_e5)].item(), "e5xd6 must be set in legal_moves_mask"
+
+        # index_to_move must decode both indices back to legal moves
+        for move in (ep_move_c5, ep_move_e5):
+            idx = move_to_index(move)
+            recovered = index_to_move(idx, board)
+            assert recovered == move, f"index_to_move round-trip failed for {move.uci()}"
+            assert recovered in board.legal_moves, f"decoded move {recovered.uci()} must be legal"
+
     def test_side_to_move_encoding(self):
         board = chess.Board()
         _, et_white = encode_board(board)

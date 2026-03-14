@@ -28,6 +28,13 @@ Extra tokens (extra_tokens), shared vocabulary, values in [0, 74]:
   token[4] castle BQ      : 8 = yes,   9 = no
   token[5] en-passant sq  : 10 = none, 11+sq for sq in [0,63]
 
+  Note on en passant: chess rules guarantee at most ONE en passant target
+  square per position (only one pawn can double-push per move).  Multiple
+  opponent pawns may all be able to capture that single target square; each of
+  those captures appears as a distinct move in ``board.legal_moves`` and is
+  therefore independently set in the legal-move mask.  ``board.ep_square`` is
+  always a single ``Optional[int]``, so a single extra token is sufficient.
+
 Move encoding
 -------------
 Moves are encoded as ``from_square * 64 + to_square`` (range 0–4095).
